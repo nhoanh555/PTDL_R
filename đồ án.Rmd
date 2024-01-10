@@ -1,0 +1,191 @@
+Sau quá trình crawl dữ liệu từ trang web Tiki.vn, tôi đã thu được một bộ dữ liệu đa dạng và phong phú về các sản phẩm có sẵn trên nền tảng thương mại điện tử này. Dữ liệu bao gồm thông tin chi tiết về hàng nghìn sản phẩm, như tên sản phẩm, giá, mô tả, đánh giá của người dùng, và các thuộc tính kỹ thuật khác.
+
+Sau khi thu thập dữ liệu, tôi đã tiến hành quá trình thống kê để mô tả đặc điểm chung của bộ dữ liệu. Điều này bao gồm việc phân tích phân phối giá cả, xác định sản phẩm phổ biến nhất, và thống kê đánh giá của người dùng. Đồng thời, tôi đã tạo các biểu đồ và đồ thị minh họa để trực quan hóa thông tin, giúp hiểu rõ hơn về xu hướng và đặc điểm của thị trường sản phẩm trên Tiki.vn.
+
+
+
+```{r}
+# Hiển thị một số dòng đầu tiên của dữ liệu
+head(dataset)
+
+```
+
+
+```{r}
+# Kiểm tra thông tin cơ bản về dataset
+str(dataset)
+```
+
+```{r}
+# Lọc những trường dữ liệu cần thiết cho việc phân tích
+new_dataset <- subset(dataset, select = c("categories", "discount", "discount_rate", "list_price", "price", "rating_average", "review_count"))
+```
+
+```{r}
+head(new_dataset)
+```
+```{r}
+# loại những mặt hàng không có tên
+# Loại bỏ các hàng có giá trị "Root" trong cột "categories"
+new_dataset <- subset(new_dataset, categories != "Root")
+```
+
+```{r}
+summary(new_dataset)
+```
+```{r}
+library(ggplot2)
+# Vẽ biểu đồ cột
+ggplot(new_dataset, aes(x = categories, fill = categories)) +
+  geom_bar() +
+  theme(legend.position="none") + # Ẩn chú thích không cần thiết đi
+  xlab('Categories') +
+  ylab('Số lượng') +
+  coord_flip()  # Dùng biểu đồ cột ngang thay vì cột dọc
+```
+
+
+```{r}
+# Vẽ biểu đồ tròn
+ggplot(new_dataset, aes(x = "", fill = categories)) +
+  geom_bar(width = 1, position = "fill") +
+  coord_polar(theta = "y") +
+  labs(title = "Biểu đồ tròn cho từng categories", fill = "Categories") +
+  theme(axis.text = element_blank(), axis.title = element_blank())
+```
+
+
+
+```{r}
+ggplot(new_dataset, aes(x = price)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  labs(title = "Histogram of Price", x = "Price", y = "Frequency")
+```
+Trục X (Horizontal Axis): Đại diện cho biến định lượng và được chia thành các khoảng (bins).
+
+Trục Y (Vertical Axis): Đại diện cho tần suất, tức là số lần xuất hiện của các giá trị trong mỗi khoảng. Khi tổng tất cả các cột trên biểu đồ histogram bằng 1, trục y thể hiện phần trăm của dữ liệu nằm trong từng khoảng.
+
+
+** Câu 3: **
+
+# Kiểm định sự khác biệt về giá bán giữa các sản phẩm
+# Giả thuyết:
+# H0: "Không có sự khác biệt về giá bán giữa các sản phẩm."
+# Ha: "Có sự khác biệt về giá bán giữa các sản phẩm."
+
+```{r}
+# Sử dụng kiểm định anova
+result_anova <- aov(price ~ categories, data = new_dataset)
+
+# Hiển thị kết quả
+summary(result_anova)
+```
+Khi p-value rất nhỏ (ở đây là 2.39e-15), chúng ta có đủ bằng chứng để bác bỏ giả thuyết không có sự khác biệt về giá bán giữa các sản phẩm. Kết quả này cũng được hỗ trợ bởi giá trị F-statistic đủ lớn (5.075), chỉ ra rằng sự khác biệt giữa ít nhất một cặp nhóm là đáng kể.
+
+```{r}
+# Sử dụng gói emmeans để thực hiện kiểm định Post hoc (Tukey's HSD)
+library(emmeans)
+
+# Tạo mô hình ANOVA
+model_anova <- aov(price ~ categories, data = new_dataset)
+
+# Thực hiện kiểm định Post hoc (Tukey's HSD)
+posthoc_results <- emmeans(model_anova, "categories", adjust = "tukey")
+
+# Hiển thị kết quả
+summary(posthoc_results)
+```
+Các cặp nhóm với khoảng tin cậy không chứa số 0 sẽ được coi là có sự khác biệt đáng kể về giá bán. Chẳng hạn, nếu khoảng tin cậy của cặp nhóm Áo thun nam ngắn tay có cổ và Quần thể thao nam không chứa số 0, có thể kết luận rằng có sự khác biệt đáng kể về giá bán giữa hai nhóm này.
+
+
+
+--REGRESSION--
+
+```{r}
+# Tạo mô hình hồi quy tuyến tính
+model <- lm(price ~ list_price + discount + review_count, data = new_dataset)
+
+# Hiển thị tóm tắt mô hình
+# summary(model)
+
+```
+
+
+Giải thích:
+
+- **Residuals:** Là các giá trị sai số (phần dư) của mô hình, được tính bằng sự chênh lệch giữa giá thực (price) và giá dự đoán từ mô hình.
+- **Coefficients:** Là các hệ số ước lượng cho mỗi biến độc lập trong mô hình. Trong trường hợp này, có bốn hệ số: Intercept, list_price, discount, và review_count.
+- **Residual standard error:** Đo lường sai số trung bình của mô hình.
+- **Multiple R-squared:** Là hệ số xác định mức độ giải thích của mô hình, nằm trong khoảng từ 0 đến 1. Trong trường hợp này, R-squared bằng 1, cho thấy mô hình giải thích hoàn toàn biến động của biến phụ thuộc (price).
+- **Adjusted R-squared:** Tương tự R-squared, nhưng điều chỉnh dựa trên số lượng biến độc lập trong mô hình.
+- **F-statistic:** Là giá trị thống kê của kiểm định F, kiểm tra sự ý nghĩa toàn bộ mô hình. Trong trường hợp này, giá trị p (p-value) rất nhỏ, do đó, mô hình được coi là ý nghĩa thống kê.
+
+
+```{r}
+# Tạo dataframe mới với các giá trị độc lập để dự đoán
+new_data <- data.frame(
+  list_price = c(219000, 1798000, 135000, 350000, 199000), # Thay đổi giá trị tùy ý
+  discount = c(18, 50, 49, 43, 28), # Thay đổi giá trị tùy ý
+  review_count = c(205, 2, 185, 70, 1250) # Thay đổi giá trị tùy ý
+)
+
+# Dự đoán giá trị mới
+predicted_values <- predict(model, newdata = new_data)
+
+# Hiển thị kết quả
+print(predicted_values)
+
+```
+# PCA
+
+```{r}
+# Chuẩn bị dữ liệu cho PCA (loại bỏ cột không phải định lượng)
+numeric_data <- new_dataset[, c("discount", "discount_rate", "list_price", "price", "rating_average", "review_count")]
+
+# Chuẩn bị dữ liệu cho PCA (loại bỏ các hàng chứa NA nếu có)
+numeric_data <- na.omit(numeric_data)
+
+# Chuẩn hóa dữ liệu
+scaled_data <- scale(numeric_data)
+
+# Thực hiện PCA
+pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)
+
+# Xem kết quả
+summary(pca_result)
+
+```
+
+Kết quả PCA mô tả quan trọng của từng thành phần chính (Principal Component - PC) như sau:
+
+1. **Standard Deviation (Độ lệch chuẩn):**
+   - PC1: 1.5961
+   - PC2: 1.2062
+   - PC3: 0.9741
+   - PC4: 0.9092
+   - PC5: 0.47136
+   - PC6: 1.35e-15
+
+   Đây là độ lệch chuẩn của mỗi thành phần chính. Độ lệch chuẩn thể hiện mức độ biến động của dữ liệu theo hướng của thành phần chính tương ứng. PC1 có độ lệch chuẩn cao nhất, đồng nghĩa với việc nó giữ nhiều thông tin hơn về biến động của dữ liệu.
+
+2. **Proportion of Variance (Tỷ lệ phương sai):**
+   - PC1: 0.4246
+   - PC2: 0.2425
+   - PC3: 0.1581
+   - PC4: 0.1378
+   - PC5: 0.03703
+   - PC6: 0.00e+00
+
+   Tỷ lệ phương sai thể hiện phần trăm phương sai của dữ liệu được giữ lại bởi mỗi thành phần chính. PC1 giữ lại 42.46% phương sai của dữ liệu, PC2 giữ lại 24.25%, và cứ tiếp tục như vậy. Tổng của các tỷ lệ phương sai này cho đến thành phần chính cuối cùng sẽ bằng 100%.
+
+3. **Cumulative Proportion (Tổng Tỷ lệ phương sai tích lũy):**
+   - PC1: 0.4246
+   - PC2: 0.6671
+   - PC3: 0.8252
+   - PC4: 0.9630
+   - PC5: 1.00000
+   - PC6: 1.00e+00
+
+   Tổng tỷ lệ phương sai tích lũy thể hiện tổng của tỷ lệ phương sai từ PC1 đến PCn. Ở đây, PC1 giữ lại 42.46% phương sai, PC2 khi thêm vào giữ lại tổng cộng là 66.71%, và cứ như vậy. Thành phần chính cuối cùng đạt đến tổng tỷ lệ phương sai là 100%.
+
+Tóm lại, kết quả này cho thấy mức độ quan trọng và đóng góp của từng thành phần chính trong việc giữ lại thông tin của dữ liệu. Thành phần chính đầu tiên thường giữ lại nhiều thông tin nhất về biến động của dữ liệu.
